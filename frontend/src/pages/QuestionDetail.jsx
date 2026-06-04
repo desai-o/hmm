@@ -24,6 +24,8 @@ function QuestionDetail() {
   const { id } = useParams();
   const [showModal, setShowModal] = useState(false);
   const [replyText, setReplyText] = useState("");
+  const [summary, setSummary] = useState("");
+  const [summaryLoading, setSummaryLoading] = useState(false);
 
   const question = questions.find((q) => String(q.id) === String(id)) || defaultQuestion;
 
@@ -44,6 +46,35 @@ function QuestionDetail() {
       addAnswer(question.id, replyText);
       setReplyText("");
     }
+  };
+
+  const generateSummary = async () => {
+  try {
+    setSummaryLoading(true);
+
+    const response = await fetch(
+      "http://localhost:5000/api/summary",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          question: question.title,
+          answers: question.answers.map((a) => a.content),
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    setSummary(data.summary);
+  } catch (err) {
+    console.error(err);
+    setSummary("Failed to generate summary.");
+  } finally {
+    setSummaryLoading(false);
+  }
   };
 
   return (
@@ -68,6 +99,41 @@ function QuestionDetail() {
                 </div>
 
                 <h1 className="detail-title">{question.title}</h1>
+                <button
+                  onClick={generateSummary}
+                  style={{
+                    marginTop: "12px",
+                    marginBottom: "12px",
+                    padding: "8px 14px",
+                    cursor: "pointer"
+                  }}
+                >
+                  ✨ Generate TL;DR
+                </button>
+
+                {summaryLoading && (
+                <div style={{ marginBottom: "12px" }}>
+                Generating summary...
+                </div>
+                )}
+
+                {summary && (
+                <div
+                style={{
+                marginBottom: "16px",
+                padding: "12px",
+                border: "1px solid #ddd",
+                borderRadius: "8px",
+                background: "#fafafa"
+                }}
+                >
+                <strong>AI Summary</strong>
+                <p>{summary}</p>
+                </div>
+                )}
+
+
+
                 <p className="detail-description">{question.description}</p>
 
                 <div className="detail-hashtags">
