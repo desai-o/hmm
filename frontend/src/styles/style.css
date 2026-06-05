@@ -859,13 +859,16 @@ input, select, textarea {
 
 /* Question title blue link */
 .q-title-blue a {
-  color: var(--accent-blue);
+  color: #000; /* black */
   font-size: 17px;
   font-weight: 600;
+  text-decoration: none;
+  transition: color 0.2s ease;
 }
 
 .q-title-blue a:hover {
-  text-decoration: underline;
+  color: var(--accent-blue); /* blue on hover */
+  text-decoration: none;
 }
 
 /* Flat question list */
