@@ -474,11 +474,13 @@ input, select, textarea {
 }
 
 .q-title a {
+  color: var(--text-primary);
   transition: color 0.15s;
 }
 
 .q-title a:hover {
   color: var(--accent-blue);
+  text-decoration: underline;
 }
 
 .q-excerpt {
@@ -859,12 +861,14 @@ input, select, textarea {
 
 /* Question title blue link */
 .q-title-blue a {
-  color: var(--accent-blue);
+  color: var(--text-primary);
   font-size: 17px;
   font-weight: 600;
+  transition: color 0.15s;
 }
 
 .q-title-blue a:hover {
+  color: var(--accent-blue);
   text-decoration: underline;
 }
 
