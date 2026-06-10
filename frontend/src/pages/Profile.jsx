@@ -103,17 +103,22 @@ function Profile() {
           {/* Main Content */}
 
           {activeTab === "Overview" && (
-            <div className="profile-grid">
-              {/* Left Column */}
+            <div className="overview-layout">
 
-              <div className="profile-left-column">
-                <div className="profile-card">
+              {/* =========================
+                  TOP ROW
+              ========================== */}
+
+              <div className="overview-top-row">
+
+                {/* Recent Content */}
+
+                <div className="recent-content-card profile-card">
                   <h3>Recent Content</h3>
 
                   <div className="content-item">
                     <h4>
-                      Best Practices for React State
-                      Management
+                      Best Practices for React State Management
                     </h4>
                     <p>
                       Published 2 days ago • 523 views
@@ -139,10 +144,64 @@ function Profile() {
                   </div>
                 </div>
 
-                <div className="profile-card">
+                {/* Right Side */}
+
+                <div className="overview-right-column">
+
+                  {/* Top FAQ */}
+
+                  <div className="top-faq-card profile-card">
+                    <h3>Top FAQ</h3>
+
+                    <h4>
+                      How does React Context differ from Redux?
+                    </h4>
+
+                    <p>
+                      1.4K Views • 245 Helpful Votes
+                    </p>
+                  </div>
+
+                  {/* Badges */}
+
+                  <div className="badges-card profile-card">
+                    <h3>Badges</h3>
+
+                    <div className="badges-grid">
+                      <span className="badge">
+                        🏆 Expert
+                      </span>
+
+                      <span className="badge">
+                        ⭐ Top Contributor
+                      </span>
+
+                      <span className="badge">
+                        🚀 Rising Star
+                      </span>
+
+                      <span className="badge">
+                        💡 Innovator
+                      </span>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+
+              {/* =========================
+                  BOTTOM ROW
+              ========================== */}
+
+              <div className="overview-bottom-row">
+
+                {/* Analytics */}
+
+                <div className="analytics-card profile-card">
                   <h3>Analytics Overview</h3>
 
                   <div className="analytics-grid">
+
                     <div className="analytics-box">
                       <span>Engagement</span>
                       <strong>94%</strong>
@@ -162,49 +221,13 @@ function Profile() {
                       <span>Reach</span>
                       <strong>22K</strong>
                     </div>
-                  </div>
-                </div>
-              </div>
 
-              {/* Right Column */}
-
-              <div className="profile-right-column">
-                <div className="profile-card">
-                  <h3>Top FAQ</h3>
-
-                  <h4>
-                    How does React Context differ from
-                    Redux?
-                  </h4>
-
-                  <p>
-                    1.4K Views • 245 Helpful Votes
-                  </p>
-                </div>
-
-                <div className="profile-card">
-                  <h3>Badges</h3>
-
-                  <div className="badges-grid">
-                    <span className="badge">
-                      🏆 Expert
-                    </span>
-
-                    <span className="badge">
-                      ⭐ Top Contributor
-                    </span>
-
-                    <span className="badge">
-                      🚀 Rising Star
-                    </span>
-
-                    <span className="badge">
-                      💡 Innovator
-                    </span>
                   </div>
                 </div>
 
-                <div className="profile-card">
+                {/* Activity */}
+
+                <div className="activity-card profile-card">
                   <h3>Recent Activity</h3>
 
                   <ul className="activity-list">
@@ -226,10 +249,13 @@ function Profile() {
                   </ul>
                 </div>
 
-                <div className="profile-card">
+                {/* Quick Links */}
+
+                <div className="quick-links-card profile-card">
                   <h3>Quick Links</h3>
 
                   <div className="quick-links">
+
                     <button>
                       My Drafts
                     </button>
@@ -245,9 +271,12 @@ function Profile() {
                     <button>
                       Account Settings
                     </button>
+
                   </div>
                 </div>
+
               </div>
+
             </div>
           )}
 
