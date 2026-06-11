@@ -84,16 +84,16 @@ function ActivityGraph() {
 
   if (activeTab === "questions") {
     tabData = data.questions;
-    tabColor = theme === "dark" ? "#60a5fa" : "#3b82f6";
-    tabBgGlow = theme === "dark" ? "rgba(96, 165, 250, 0.15)" : "rgba(59, 130, 246, 0.15)";
+    tabColor = theme === "dark" ? "#9ca3af" : "#6b7280";
+    tabBgGlow = theme === "dark" ? "rgba(156, 163, 175, 0.15)" : "rgba(107, 114, 128, 0.15)";
   } else if (activeTab === "answers") {
     tabData = data.answers;
     tabColor = theme === "dark" ? "#4ade80" : "#22c55e";
     tabBgGlow = theme === "dark" ? "rgba(74, 222, 128, 0.15)" : "rgba(34, 197, 94, 0.15)";
   } else if (activeTab === "upvotes") {
     tabData = data.upvotes;
-    tabColor = theme === "dark" ? "#fb923c" : "#f97316";
-    tabBgGlow = theme === "dark" ? "rgba(251, 146, 60, 0.15)" : "rgba(249, 115, 22, 0.15)";
+    tabColor = theme === "dark" ? "#60a5fa" : "#3b82f6";
+    tabBgGlow = theme === "dark" ? "rgba(96, 165, 250, 0.15)" : "rgba(59, 130, 246, 0.15)";
   }
 
   // Calculate tab-specific indicators
