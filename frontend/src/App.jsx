@@ -11,12 +11,13 @@ import Profile from "./pages/Profile";
 function App() {
   return (
     <Routes>
-      <Route path="/" element={<Profile />} />
+      <Route path="/" element={<Dashboard />} />
       <Route path="/questions" element={<Questions />} />
       <Route path="/questions/:id" element={<QuestionDetail />} />
       <Route path="/categories" element={<Categories />} />
       <Route path="/contributors" element={<Contributors />} />
       <Route path="/bookmarks" element={<Bookmarks />} />
+      <Route path="/profile" element={<Profile />} />
     </Routes>
   );
 }
