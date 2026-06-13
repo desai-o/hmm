@@ -5,6 +5,7 @@ const { isMongoAvailable } = require("../db/mongo");
 const { getSQLiteDb } = require("../db/sqlite");
 const FAQ = require("../models/FAQ");
 const { extractKeywords } = require("../services/syncService");
+const { inferCategory, normalizeTags } = require("../services/categoryService");
 
 router.get("/", async (req, res) => {
   try {
@@ -39,7 +40,10 @@ router.get("/", async (req, res) => {
 
 router.post("/", async (req, res) => {
   try {
-    const { question, answer } = req.body;
+    const { question, answer, category, tags } = req.body;
+
+    const inferredCategory = category || inferCategory(`${question || ""} ${answer || ""}`);
+    const normalizedTags = normalizeTags(tags || []);
 
     if (!question || question.trim() === "" || !answer || answer.trim() === "") {
       return res.status(400).json({
@@ -65,7 +69,9 @@ router.post("/", async (req, res) => {
       const faq = await FAQ.create({
         question: question.trim(),
         answer: answer.trim(),
-        keywords
+        keywords,
+        category: inferredCategory,
+        tags: normalizedTags
       });
 
       return res.status(201).json({
@@ -82,13 +88,17 @@ router.post("/", async (req, res) => {
         question,
         answer,
         keywords,
+        category,
+        tags,
         synced_to_mongo
       )
-      VALUES (?, ?, ?, 0)
+      VALUES (?, ?, ?, ?, ?, 0)
       `,
       question.trim(),
       answer.trim(),
-      keywords.join(",")
+      keywords.join(","),
+      inferredCategory,
+      normalizedTags.join(",")
     );
 
     return res.status(201).json({
@@ -103,6 +113,55 @@ router.post("/", async (req, res) => {
   } catch (error) {
     res.status(500).json({
       error: "Failed to create FAQ",
+      details: error.message
+    });
+  }
+});
+
+router.get("/meta/categories", async (req, res) => {
+  try {
+    if (isMongoAvailable()) {
+      const categories = await FAQ.aggregate([
+        {
+          $group: {
+            _id: "$category",
+            count: { $sum: 1 }
+          }
+        },
+        {
+          $sort: {
+            count: -1
+          }
+        }
+      ]);
+
+      return res.json({
+        status: "success",
+        storage: "mongodb",
+        data: categories.map((item) => ({
+          name: item._id || "General",
+          questions: item.count
+        }))
+      });
+    }
+
+    const db = getSQLiteDb();
+
+    const rows = await db.all(`
+      SELECT category AS name, COUNT(*) AS questions
+      FROM faqs
+      GROUP BY category
+      ORDER BY questions DESC
+    `);
+
+    return res.json({
+      status: "success",
+      storage: "sqlite",
+      data: rows
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: "Failed to fetch categories",
       details: error.message
     });
   }

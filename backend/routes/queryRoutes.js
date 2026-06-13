@@ -6,10 +6,16 @@ const { getSQLiteDb } = require("../db/sqlite");
 const UserQuery = require("../models/UserQuery");
 const { runSyncPipeline } = require("../services/syncService");
 const { trackEvent } = require("../services/eventService");
+const { inferCategory, normalizeTags } = require("../services/categoryService");
 
 router.post("/", async (req, res) => {
   try {
-    const { question, answer } = req.body;
+    const { question, answer, category, tags, description } = req.body;
+
+    const inferredCategory =
+      category || inferCategory(`${question || ""} ${description || ""} ${answer || ""}`);
+
+    const normalizedTags = normalizeTags(tags || []);
 
     if (!question || question.trim() === "") {
       return res.status(400).json({
@@ -33,6 +39,9 @@ router.post("/", async (req, res) => {
       const query = await UserQuery.create({
         question: question.trim(),
         answer: answer ? answer.trim() : "",
+        description: description ? description.trim() : "",
+        category: inferredCategory,
+        tags: normalizedTags,
         status: answer ? "resolved" : "pending",
         source: "frontend"
       });
@@ -63,14 +72,20 @@ router.post("/", async (req, res) => {
       INSERT INTO user_queries (
         question,
         answer,
+        description,
+        category,
+        tags,
         status,
         source,
         synced_to_mongo
       )
-      VALUES (?, ?, ?, ?, 0)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 0)
       `,
       question.trim(),
       answer ? answer.trim() : "",
+      description ? description.trim() : "",
+      inferredCategory,
+      normalizedTags.join(","),
       answer ? "resolved" : "pending",
       "frontend"
     );

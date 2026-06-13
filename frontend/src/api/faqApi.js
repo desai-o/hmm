@@ -26,11 +26,19 @@ export async function fetchQueries() {
   return request("/queries");
 }
 
-export async function searchFaq(keyword) {
+export async function searchFaq({ keyword, category = "All Categories", limit = 20 }) {
   return request("/search", {
     method: "POST",
-    body: JSON.stringify({ keyword })
+    body: JSON.stringify({
+      keyword,
+      category,
+      limit
+    })
   });
+}
+
+export async function fetchCategories() {
+  return request("/faqs/meta/categories");
 }
 
 export async function submitQuery(payload) {

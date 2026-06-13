@@ -9,7 +9,7 @@ const { trackEvent } = require("../services/eventService");
 
 router.post("/", async (req, res) => {
   try {
-    const { keyword, keywords } = req.body;
+    const { keyword, keywords, category, limit = 20 } = req.body;
 
     let searchTerms = [];
 
@@ -31,6 +31,8 @@ router.post("/", async (req, res) => {
 
     const searchText = searchTerms.join(" ");
 
+    const normalizedLimit = Math.min(Number(limit) || 20, 50);
+
     await trackEvent({
       type: "search_performed",
       userId: "anonymous",
@@ -42,39 +44,56 @@ router.post("/", async (req, res) => {
     });
 
     if (isMongoAvailable()) {
+      const faqFilter = {
+        $text: {
+          $search: searchText
+        }
+      };
+
+      if (category && category !== "All Categories") {
+        faqFilter.category = category;
+      }
+
+      const queryFilter = {
+        $text: {
+          $search: searchText
+        }
+      };
+
+      if (category && category !== "All Categories") {
+        queryFilter.category = category;
+      }
+
       const faqResults = await FAQ.find(
-        {
-          $text: {
-            $search: searchText
-          }
-        },
+        faqFilter,
         {
           score: {
             $meta: "textScore"
           }
         }
-      ).sort({
-        score: {
-          $meta: "textScore"
-        }
-      });
+      )
+        .sort({
+          score: {
+            $meta: "textScore"
+          },
+          searchBoost: -1
+        })
+        .limit(normalizedLimit);
 
       const queryResults = await UserQuery.find(
-        {
-          $text: {
-            $search: searchText
-          }
-        },
+        queryFilter,
         {
           score: {
             $meta: "textScore"
           }
         }
-      ).sort({
-        score: {
-          $meta: "textScore"
-        }
-      });
+      )
+        .sort({
+          score: {
+            $meta: "textScore"
+          }
+        })
+        .limit(normalizedLimit);
 
       return res.json({
         storage: "mongodb",
@@ -90,30 +109,57 @@ router.post("/", async (req, res) => {
 
     const likePattern = `%${searchText}%`;
 
+    const categoryFilter =
+      category && category !== "All Categories" ? category : null;
+
     const faqResults = await db.all(
       `
       SELECT *
       FROM faqs
-      WHERE LOWER(question) LIKE LOWER(?)
-         OR LOWER(answer) LIKE LOWER(?)
-         OR LOWER(keywords) LIKE LOWER(?)
-      ORDER BY updated_at DESC
+      WHERE (
+          LOWER(question) LIKE LOWER(?)
+          OR LOWER(answer) LIKE LOWER(?)
+          OR LOWER(keywords) LIKE LOWER(?)
+          OR LOWER(tags) LIKE LOWER(?)
+          OR LOWER(category) LIKE LOWER(?)
+        )
+        AND (? IS NULL OR category = ?)
+      ORDER BY search_boost DESC, updated_at DESC
+      LIMIT ?
       `,
       likePattern,
       likePattern,
-      likePattern
+      likePattern,
+      likePattern,
+      likePattern,
+      categoryFilter,
+      categoryFilter,
+      normalizedLimit
     );
 
     const queryResults = await db.all(
       `
       SELECT *
       FROM user_queries
-      WHERE LOWER(question) LIKE LOWER(?)
-         OR LOWER(answer) LIKE LOWER(?)
+      WHERE (
+          LOWER(question) LIKE LOWER(?)
+          OR LOWER(answer) LIKE LOWER(?)
+          OR LOWER(description) LIKE LOWER(?)
+          OR LOWER(tags) LIKE LOWER(?)
+          OR LOWER(category) LIKE LOWER(?)
+        )
+        AND (? IS NULL OR category = ?)
       ORDER BY updated_at DESC
+      LIMIT ?
       `,
       likePattern,
-      likePattern
+      likePattern,
+      likePattern,
+      likePattern,
+      likePattern,
+      categoryFilter,
+      categoryFilter,
+      normalizedLimit
     );
 
     return res.json({
