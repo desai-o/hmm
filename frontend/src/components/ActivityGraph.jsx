@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { fetchActivityStats } from "../api/faqApi";
 import { useTheme } from "../context/ThemeContext";
 import { Line } from "react-chartjs-2";
 import {
@@ -38,11 +39,7 @@ function ActivityGraph() {
     const fetchStats = async () => {
       try {
         setLoading(true);
-        const response = await fetch("http://localhost:5000/api/stats/activity?range=week");
-        if (!response.ok) {
-          throw new Error("Failed to fetch activity stats");
-        }
-        const json = await response.json();
+        const json = await fetchActivityStats("week");
         setData(json);
       } catch (err) {
         console.warn("API error, using client-side fallback data:", err);

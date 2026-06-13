@@ -1,5 +1,12 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import { useAuth } from "./AuthContext";
+import {
+  fetchFaqs,
+  submitQuery,
+  submitAnswer,
+  toggleVote,
+  toggleBookmarkApi
+} from "../api/faqApi";
 
 const FAQContext = createContext();
 
@@ -222,12 +229,42 @@ const initialContributors = [
   { rank: 10, name: "Ryan Park", avatar: "R", answers: 78, questions: 8, reputation: 2980, tier: "bronze", medal: "" }
 ];
 
+function mapBackendFaqToQuestion(faq) {
+  const id = faq._id || faq.id || faq.mongo_id;
+
+  return {
+    id,
+    title: faq.question,
+    category: faq.category || "General",
+    excerpt:
+      faq.answer && faq.answer.length > 120
+        ? `${faq.answer.substring(0, 120)}...`
+        : faq.answer || "",
+    description: faq.answer || "",
+    hashtags: Array.isArray(faq.keywords)
+      ? faq.keywords
+      : typeof faq.keywords === "string"
+        ? faq.keywords.split(",").filter(Boolean)
+        : [],
+    votes: faq.votes || 0,
+    voted: false,
+    bookmarked: false,
+    author: faq.author || "Community Member",
+    time: faq.createdAt || faq.created_at || "Recently",
+    views: faq.views || 0,
+    answers: faq.answers || []
+  };
+}
+
 export function FAQProvider({ children }) {
   const { user } = useAuth();
   const [questions, setQuestions] = useState(() => {
     const saved = localStorage.getItem("crowdfaq_questions");
     return saved ? JSON.parse(saved) : initialQuestions;
   });
+  const [questions, setQuestions] = useState(initialQuestions);
+  const [backendOnline, setBackendOnline] = useState(false);
+  const [loadingQuestions, setLoadingQuestions] = useState(true);
 
   const [contributors, setContributors] = useState(() => {
     const saved = localStorage.getItem("crowdfaq_contributors");
@@ -237,8 +274,10 @@ export function FAQProvider({ children }) {
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
-    localStorage.setItem("crowdfaq_questions", JSON.stringify(questions));
-  }, [questions]);
+    if (!backendOnline) {
+      localStorage.setItem("crowdfaq_questions", JSON.stringify(questions));
+    }
+  }, [questions, backendOnline]);
 
   useEffect(() => {
     localStorage.setItem("crowdfaq_contributors", JSON.stringify(contributors));
@@ -246,64 +285,41 @@ export function FAQProvider({ children }) {
 
   // Sync with Backend database on mount
   useEffect(() => {
-    const syncWithBackend = async () => {
+    const loadFromBackend = async () => {
       try {
-        const response = await fetch("http://localhost:5000/api/faqs");
-        if (response.ok) {
-          const resData = await response.json();
-          // If there are FAQs in the database, merge them into our local questions list
-          if (resData.data && resData.data.length > 0) {
-            setQuestions((prevQuestions) => {
-              const updated = [...prevQuestions];
-              resData.data.forEach((backendFaq) => {
-                const exists = updated.some(
-                  (q) => q.title.toLowerCase() === backendFaq.question.toLowerCase()
-                );
-                if (!exists) {
-                  updated.push({
-                    id: `be-${backendFaq.id || backendFaq._id}`,
-                    title: backendFaq.question,
-                    excerpt: backendFaq.answer.substring(0, 120) + (backendFaq.answer.length > 120 ? "..." : ""),
-                    description: backendFaq.answer,
-                    category: "General",
-                    hashtags: backendFaq.keywords ? (Array.isArray(backendFaq.keywords) ? backendFaq.keywords : backendFaq.keywords.split(",")) : [],
-                    votes: 1,
-                    voted: false,
-                    bookmarked: false,
-                    author: "Community Member",
-                    time: "Just now",
-                    views: 45,
-                    answers: []
-                  });
-                }
-              });
-              return updated;
-            });
-          } else {
-            // Backend is empty. Let's seed it with our initialQuestions to make sure it has data!
-            for (const q of initialQuestions) {
-              await fetch("http://localhost:5000/api/faqs", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  question: q.title,
-                  answer: q.description || q.excerpt
-                })
-              }).catch(() => {});
-            }
-          }
+        setLoadingQuestions(true);
+
+        const response = await fetchFaqs();
+        const backendFaqs = response.data || [];
+
+        if (backendFaqs.length > 0) {
+          setQuestions(backendFaqs.map(mapBackendFaqToQuestion));
+        } else {
+          const saved = localStorage.getItem("crowdfaq_questions");
+          setQuestions(saved ? JSON.parse(saved) : initialQuestions);
         }
+
+        setBackendOnline(true);
       } catch (err) {
-        console.warn("Backend API not reachable. Operating in standalone localStorage mode:", err);
+        console.warn("Backend unavailable. Using localStorage fallback:", err.message);
+
+        const saved = localStorage.getItem("crowdfaq_questions");
+        setQuestions(saved ? JSON.parse(saved) : initialQuestions);
+        setBackendOnline(false);
+      } finally {
+        setLoadingQuestions(false);
       }
     };
 
-    syncWithBackend();
+    loadFromBackend();
   }, []);
 
   const addQuestion = async (title, category, description, hashtagsString) => {
     const tags = hashtagsString
-      ? hashtagsString.split(",").map((t) => t.trim().replace(/^#/, "")).filter(Boolean)
+      ? hashtagsString
+          .split(",")
+          .map((t) => t.trim().replace(/^#/, ""))
+          .filter(Boolean)
       : [];
 
     const authorName = user ? user.name : "Guest";
@@ -323,8 +339,16 @@ export function FAQProvider({ children }) {
       views: 1,
       answers: []
     };
+    try {
+      const response = await submitQuery({
+        question: title,
+        answer: "",
+        category,
+        description,
+        hashtags: tags
+      });
 
-    setQuestions((prev) => [newQuestion, ...prev]);
+      const saved = response.data;
 
     // Update contributor list with this user's question
     setContributors((prev) => {
@@ -339,50 +363,127 @@ export function FAQProvider({ children }) {
         { rank: 99, name: authorName, avatar: authorName.charAt(0).toUpperCase(), answers: 0, questions: 1, reputation: 5, tier: "bronze" }
       ].sort((a, b) => b.reputation - a.reputation).map((c, i) => ({ ...c, rank: i + 1 }));
     });
+      const newQuestion = {
+        id: saved._id || saved.id,
+        title,
+        category,
+        excerpt:
+          description.length > 120
+            ? `${description.substring(0, 120)}...`
+            : description,
+        description,
+        hashtags: tags,
+        votes: 0,
+        voted: false,
+        bookmarked: false,
+        author: "Community Member",
+        time: "Just now",
+        views: 0,
+        answers: []
+      };
 
-    // Save to backend
-    try {
-      await fetch("http://localhost:5000/api/queries", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          question: title.trim(),
-          answer: description.trim()
-        })
-      });
+      setQuestions((prev) => [newQuestion, ...prev]);
+      return newQuestion;
     } catch (err) {
-      console.warn("Could not post new question to backend database server:", err);
+      console.warn("Backend write failed. Saving locally:", err.message);
+
+      const newQuestion = {
+        id: Date.now(),
+        title,
+        category,
+        excerpt:
+          description.length > 120
+            ? `${description.substring(0, 120)}...`
+            : description,
+        description,
+        hashtags: tags,
+        votes: 0,
+        voted: false,
+        bookmarked: false,
+        author: "Community Member",
+        time: "Just now",
+        views: 0,
+        answers: []
+      };
+
+      setQuestions((prev) => [newQuestion, ...prev]);
+      return newQuestion;
     }
   };
 
-  const upvoteQuestion = (id) => {
-    setQuestions((prev) =>
-      prev.map((q) => {
-        if (q.id === id) {
-          const newVoted = !q.voted;
-          return {
-            ...q,
-            votes: newVoted ? q.votes + 1 : q.votes - 1,
-            voted: newVoted
-          };
-        }
-        return q;
-      })
-    );
+  const upvoteQuestion = async (id) => {
+    try {
+      const response = await toggleVote({
+        userId: "anonymous",
+        targetType: "question",
+        targetId: String(id),
+        value: 1
+      });
+
+      const delta = response.action === "created" ? 1 : -1;
+
+      setQuestions((prev) =>
+        prev.map((q) =>
+          String(q.id) === String(id)
+            ? {
+                ...q,
+                votes: Math.max(0, q.votes + delta),
+                voted: response.action === "created"
+              }
+            : q
+        )
+      );
+    } catch (err) {
+      console.warn("Vote API failed. Applying local fallback:", err.message);
+
+      setQuestions((prev) =>
+        prev.map((q) => {
+          if (String(q.id) === String(id)) {
+            const newVoted = !q.voted;
+            return {
+              ...q,
+              votes: newVoted ? q.votes + 1 : Math.max(0, q.votes - 1),
+              voted: newVoted
+            };
+          }
+
+          return q;
+        })
+      );
+    }
   };
 
-  const bookmarkQuestion = (id) => {
-    setQuestions((prev) =>
-      prev.map((q) => {
-        if (q.id === id) {
-          return {
-            ...q,
-            bookmarked: !q.bookmarked
-          };
-        }
-        return q;
-      })
-    );
+  const bookmarkQuestion = async (id) => {
+    try {
+      const response = await toggleBookmarkApi({
+        userId: "anonymous",
+        questionId: String(id)
+      });
+
+      setQuestions((prev) =>
+        prev.map((q) =>
+          String(q.id) === String(id)
+            ? {
+                ...q,
+                bookmarked: response.action === "created"
+              }
+            : q
+        )
+      );
+    } catch (err) {
+      console.warn("Bookmark API failed. Applying local fallback:", err.message);
+
+      setQuestions((prev) =>
+        prev.map((q) =>
+          String(q.id) === String(id)
+            ? {
+                ...q,
+                bookmarked: !q.bookmarked
+              }
+            : q
+        )
+      );
+    }
   };
 
   const addAnswer = async (questionId, content) => {
@@ -433,55 +534,106 @@ export function FAQProvider({ children }) {
           .map((c, i) => ({ ...c, rank: i + 1 }));
       }
     });
+  const addAnswer = async (questionId, content, author = "Community Member") => {
+    const cleanContent = content.trim();
 
-    // Post resolution to backend if it's a backend question
-    if (String(questionId).startsWith("be-")) {
-      const rawId = String(questionId).replace("be-", "");
-      try {
-        await fetch(`http://localhost:5000/api/queries/${rawId}/resolve`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ answer: content })
-        });
-      } catch (e) {
-        console.warn("Could not patch resolve on backend:", e);
-      }
+    if (!cleanContent) return null;
+
+    try {
+      const response = await submitAnswer({
+        questionId,
+        content: cleanContent,
+        author
+      });
+
+      const savedAnswer = response.data;
+
+      const newAnswer = {
+        id: savedAnswer._id || savedAnswer.id,
+        author: savedAnswer.author || author,
+        avatar: (savedAnswer.author || author).charAt(0).toUpperCase(),
+        content: savedAnswer.content,
+        votes: savedAnswer.votes || 0,
+        time: "Just now",
+        isBest: savedAnswer.isBest || false,
+        voted: false
+      };
+
+      setQuestions((prev) =>
+        prev.map((q) =>
+          String(q.id) === String(questionId)
+            ? {
+                ...q,
+                answers: [newAnswer, ...(q.answers || [])]
+              }
+            : q
+        )
+      );
+
+      return newAnswer;
+    } catch (err) {
+      console.warn("Answer backend write failed. Saving locally:", err.message);
+
+      const fallbackAnswer = {
+        id: Date.now(),
+        author,
+        avatar: author.charAt(0).toUpperCase(),
+        content: cleanContent,
+        votes: 0,
+        time: "Just now",
+        isBest: false,
+        voted: false
+      };
+
+      setQuestions((prev) =>
+        prev.map((q) =>
+          String(q.id) === String(questionId)
+            ? {
+                ...q,
+                answers: [fallbackAnswer, ...(q.answers || [])]
+              }
+            : q
+        )
+      );
+
+      return fallbackAnswer;
     }
   };
 
-  const upvoteAnswer = (questionId, answerId) => {
-    setQuestions((prev) =>
-      prev.map((q) => {
-        if (q.id === Number(questionId) || q.id === questionId) {
-          return {
-            ...q,
-            answers: q.answers.map((ans) => {
-              if (ans.id === answerId) {
-                const newVoted = !ans.voted;
-                // Reward or deduct author's reputation
-                setContributors((prevContribs) =>
-                  prevContribs
-                    .map((c) =>
-                      c.name === ans.author
-                        ? { ...c, reputation: newVoted ? c.reputation + 10 : c.reputation - 10 }
-                        : c
-                    )
-                    .sort((a, b) => b.reputation - a.reputation)
-                    .map((c, i) => ({ ...c, rank: i + 1 }))
-                );
-                return {
-                  ...ans,
-                  votes: newVoted ? ans.votes + 1 : ans.votes - 1,
-                  voted: newVoted
-                };
-              }
-              return ans;
-            })
-          };
-        }
-        return q;
-      })
-    );
+  const upvoteAnswer = async (questionId, answerId) => {
+    try {
+      const response = await toggleVote({
+        userId: "anonymous",
+        targetType: "answer",
+        targetId: String(answerId),
+        value: 1
+      });
+
+      const delta = response.action === "created" ? 1 : -1;
+
+      setQuestions((prev) =>
+        prev.map((q) => {
+          if (String(q.id) === String(questionId)) {
+            return {
+              ...q,
+              answers: q.answers.map((ans) =>
+                String(ans.id) === String(answerId)
+                  ? {
+                      ...ans,
+                      votes: Math.max(0, ans.votes + delta),
+                      voted: response.action === "created"
+                    }
+                  : ans
+              )
+            };
+          }
+
+          return q;
+        })
+      );
+    } catch (err) {
+      console.warn("Answer vote API failed. Applying local fallback:", err.message);
+    }
   };
 
   // Get dynamic categories list with correct question count
@@ -514,7 +666,13 @@ export function FAQProvider({ children }) {
         upvoteQuestion,
         bookmarkQuestion,
         addAnswer,
-        upvoteAnswer
+        upvoteAnswer,
+        backendOnline,
+        loadingQuestions,
+        refreshQuestions: async () => {
+          const response = await fetchFaqs();
+          setQuestions((response.data || []).map(mapBackendFaqToQuestion));
+        }
       }}
     >
       {children}
