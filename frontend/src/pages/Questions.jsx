@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { searchFaq } from "../api/faqApi";
 import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
 import AskQuestionModal from "../components/AskQuestionModal";
@@ -8,15 +9,67 @@ import { useFAQ } from "../context/FAQContext";
 const filters = ["All", "Unanswered", "Most Voted", "Newest"];
 
 function Questions() {
-  const { questions, upvoteQuestion, searchQuery, setSearchQuery } = useFAQ();
+  const { questions, upvoteQuestion, searchQuery, setSearchQuery, categories } = useFAQ();
   const [showModal, setShowModal] = useState(false);
   const [activeFilter, setActiveFilter] = useState("All");
   const [selectedCategory, setSelectedCategory] = useState("All Categories");
+  const [backendResults, setBackendResults] = useState(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+
+  useEffect(() => {
+    const runBackendSearch = async () => {
+      if (!searchQuery.trim()) {
+        setBackendResults(null);
+        return;
+      }
+
+      try {
+        setSearchLoading(true);
+
+        const response = await searchFaq({
+          keyword: searchQuery,
+          category: selectedCategory
+        });
+
+        const mapped = (response.results?.faqs || []).map((faq) => ({
+          id: faq._id || faq.id,
+          title: faq.question,
+          category: faq.category || "General",
+          excerpt:
+            faq.answer && faq.answer.length > 120
+              ? `${faq.answer.substring(0, 120)}...`
+              : faq.answer || "",
+          description: faq.answer || "",
+          hashtags: faq.tags || faq.keywords || [],
+          votes: faq.votes || 0,
+          voted: false,
+          bookmarked: false,
+          author: faq.author || "Community Member",
+          time: faq.createdAt || "Recently",
+          views: faq.views || 0,
+          answers: []
+        }));
+
+        setBackendResults(mapped);
+      } catch (err) {
+        console.warn("Backend search failed. Using local search:", err.message);
+        setBackendResults(null);
+      } finally {
+        setSearchLoading(false);
+      }
+    };
+
+    runBackendSearch();
+  }, [searchQuery, selectedCategory]);
 
   let filtered = [...questions];
 
+  if (backendResults) {
+    filtered = backendResults;
+  }
+
   // Apply search query
-  if (searchQuery.trim()) {
+  if (!backendResults && searchQuery.trim()) {
     filtered = filtered.filter(
       (q) =>
         q.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -72,13 +125,12 @@ function Questions() {
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
             >
-              <option>All Categories</option>
-              <option>Programming</option>
-              <option>Artificial Intelligence</option>
-              <option>Career</option>
-              <option>Research</option>
-              <option>Scholarships</option>
-              <option>Mathematics</option>
+              <option value="All Categories">All Categories</option>
+              {categories.map((cat) => (
+                <option key={cat.name} value={cat.name}>
+                  {cat.name}
+                </option>
+              ))}
             </select>
           </div>
 

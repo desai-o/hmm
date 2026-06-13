@@ -1,45 +1,50 @@
 const express = require("express");
 const router = express.Router();
+const { z } = require("zod");
 
 const { isMongoAvailable } = require("../db/mongo");
 const { getSQLiteDb } = require("../db/sqlite");
 const UserQuery = require("../models/UserQuery");
 const { runSyncPipeline } = require("../services/syncService");
 const { trackEvent } = require("../services/eventService");
+const { inferCategory, normalizeTags } = require("../services/categoryService");
+const { validate } = require("../middleware/validate");
 
-router.post("/", async (req, res) => {
+const createQuerySchema = z.object({
+  body: z.object({
+    question: z.string().min(3).max(500),
+    answer: z.string().max(3000).optional(),
+    description: z.string().max(3000).optional(),
+    category: z.string().max(100).optional(),
+    tags: z.array(z.string().max(40)).optional()
+  }),
+  params: z.object({}).optional(),
+  query: z.object({}).optional()
+});
+
+router.post("/", validate(createQuerySchema), async (req, res) => {
   try {
-    const { question, answer } = req.body;
+    const { question, answer, category, tags, description } = req.body;
 
-    if (!question || question.trim() === "") {
-      return res.status(400).json({
-        error: "Question is required"
-      });
-    }
-
-    if (question.length > 500) {
-      return res.status(400).json({
-        error: "Question must be 500 characters or less"
-      });
-    }
-
-    if (answer && answer.length > 3000) {
-      return res.status(400).json({
-        error: "Answer must be 3000 characters or less"
-      });
-    }
+    const inferredCategory = category || inferCategory(`${question || ""} ${description || ""} ${answer || ""}`);
+    const normalizedTags = normalizeTags(tags || []);
 
     if (isMongoAvailable()) {
       const query = await UserQuery.create({
         question: question.trim(),
         answer: answer ? answer.trim() : "",
+        description: description ? description.trim() : "",
+        category: inferredCategory,
+        tags: normalizedTags,
         status: answer ? "resolved" : "pending",
-        source: "frontend"
+        source: "frontend",
+        userId: req.user?.id || "anonymous",
+        authorName: req.user?.name || "Anonymous"
       });
 
       await trackEvent({
         type: answer ? "faq_created" : "question_created",
-        userId: "anonymous",
+        userId: req.user?.id || "anonymous",
         targetType: "query",
         targetId: String(query._id),
         metadata: {
@@ -63,21 +68,31 @@ router.post("/", async (req, res) => {
       INSERT INTO user_queries (
         question,
         answer,
+        description,
+        category,
+        tags,
         status,
         source,
+        user_id,
+        author_name,
         synced_to_mongo
       )
-      VALUES (?, ?, ?, ?, 0)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
       `,
       question.trim(),
       answer ? answer.trim() : "",
+      description ? description.trim() : "",
+      inferredCategory,
+      normalizedTags.join(","),
       answer ? "resolved" : "pending",
-      "frontend"
+      "frontend",
+      req.user?.id || "anonymous",
+      req.user?.name || "Anonymous"
     );
 
     await trackEvent({
       type: answer ? "faq_created" : "question_created",
-      userId: "anonymous",
+      userId: req.user?.id || "anonymous",
       targetType: "query",
       targetId: String(result.lastID),
       metadata: {

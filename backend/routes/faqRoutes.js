@@ -5,6 +5,8 @@ const { isMongoAvailable } = require("../db/mongo");
 const { getSQLiteDb } = require("../db/sqlite");
 const FAQ = require("../models/FAQ");
 const { extractKeywords } = require("../services/syncService");
+const { inferCategory, normalizeTags } = require("../services/categoryService");
+const { getCache, setCache, clearCache } = require("../services/cacheService");
 
 router.get("/", async (req, res) => {
   try {
@@ -39,7 +41,7 @@ router.get("/", async (req, res) => {
 
 router.post("/", async (req, res) => {
   try {
-    const { question, answer } = req.body;
+    const { question, answer, category, tags } = req.body;
 
     if (!question || question.trim() === "" || !answer || answer.trim() === "") {
       return res.status(400).json({
@@ -60,13 +62,19 @@ router.post("/", async (req, res) => {
     }
 
     const keywords = extractKeywords(`${question} ${answer}`);
+    const inferredCategory = category || inferCategory(`${question || ""} ${answer || ""}`);
+    const normalizedTags = normalizeTags(tags || []);
 
     if (isMongoAvailable()) {
       const faq = await FAQ.create({
         question: question.trim(),
         answer: answer.trim(),
-        keywords
+        keywords,
+        category: inferredCategory,
+        tags: normalizedTags
       });
+
+      clearCache("categories");
 
       return res.status(201).json({
         storage: "mongodb",
@@ -82,14 +90,20 @@ router.post("/", async (req, res) => {
         question,
         answer,
         keywords,
+        category,
+        tags,
         synced_to_mongo
       )
-      VALUES (?, ?, ?, 0)
+      VALUES (?, ?, ?, ?, ?, 0)
       `,
       question.trim(),
       answer.trim(),
-      keywords.join(",")
+      keywords.join(","),
+      inferredCategory,
+      normalizedTags.join(",")
     );
+
+    clearCache("categories");
 
     return res.status(201).json({
       storage: "sqlite",
@@ -97,12 +111,74 @@ router.post("/", async (req, res) => {
         id: result.lastID,
         question: question.trim(),
         answer: answer.trim(),
-        keywords
+        keywords,
+        category: inferredCategory,
+        tags: normalizedTags
       }
     });
   } catch (error) {
     res.status(500).json({
       error: "Failed to create FAQ",
+      details: error.message
+    });
+  }
+});
+
+router.get("/meta/categories", async (req, res) => {
+  try {
+    const cached = getCache("categories");
+    if (cached) {
+      return res.json(cached);
+    }
+
+    if (isMongoAvailable()) {
+      const categories = await FAQ.aggregate([
+        {
+          $group: {
+            _id: "$category",
+            count: { $sum: 1 }
+          }
+        },
+        {
+          $sort: {
+            count: -1
+          }
+        }
+      ]);
+
+      const payload = {
+        status: "success",
+        storage: "mongodb",
+        data: categories.map((item) => ({
+          name: item._id || "General",
+          questions: item.count
+        }))
+      };
+
+      setCache("categories", payload, 60000);
+      return res.json(payload);
+    }
+
+    const db = getSQLiteDb();
+
+    const rows = await db.all(`
+      SELECT category AS name, COUNT(*) AS questions
+      FROM faqs
+      GROUP BY category
+      ORDER BY questions DESC
+    `);
+
+    const payload = {
+      status: "success",
+      storage: "sqlite",
+      data: rows
+    };
+
+    setCache("categories", payload, 60000);
+    return res.json(payload);
+  } catch (error) {
+    res.status(500).json({
+      error: "Failed to fetch categories",
       details: error.message
     });
   }
