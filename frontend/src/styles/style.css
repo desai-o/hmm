@@ -28,7 +28,7 @@
 :root,
 [data-theme="light"] {
   --bg-page:        #f5f4f0;
-  --bg-sidebar:     #1a1a1a;
+  --bg-sidebar:     #ffffff;
   --bg-white:       #ffffff;
   --bg-cta:         #2b2b2b;
   --bg-input:       #ffffff;
@@ -106,7 +106,7 @@
 /* ── DARK THEME ── */
 [data-theme="dark"] {
   --bg-page:        #1a1a1a;
-  --bg-sidebar:     #0d0d0d;
+  --bg-sidebar:     #ffffff;
   --bg-white:       #242424;
   --bg-cta:         #151515;
   --bg-input:       #2a2a2a;
@@ -253,14 +253,14 @@ input, select, textarea {
 
 .logo-icon {
   font-size: 20px;
-  color: var(--text-white);
+  color: #111827;
 }
 
 .logo-text {
   font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.3px;
-  color: var(--text-white);
+  color: #111827;
 }
 
 /* ── SIDEBAR NAV ── */
@@ -278,18 +278,18 @@ input, select, textarea {
   border-radius: var(--radius-sm);
   font-size: 15px;
   font-weight: 500;
-  color: #aaaaaa;
+  color: #666666;
   transition: background 0.15s, color 0.15s;
 }
 
 .nav-item:hover {
-  background: rgba(255,255,255,0.08);
-  color: #ffffff;
+  background: #f3f4f6;
+  color: #111827;
 }
 
 .nav-item.active {
-  background: rgba(255,255,255,0.12);
-  color: #ffffff;
+  background: #f3f4f6;
+  color: #111827;
 }
 
 .nav-icon {
@@ -459,13 +459,14 @@ input, select, textarea {
 }
 
 .ask-btn {
-  background: var(--text-primary);
-  color: var(--bg-page);
+  background: #ffffff;
+  color: #111827;
   padding: 10px 20px;
   border-radius: 50px;
   font-size: 14px;
   font-weight: 600;
   transition: opacity 0.15s;
+  border: 1px solid #e5e7eb;
 }
 
 .ask-btn:hover {
