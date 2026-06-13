@@ -50,6 +50,23 @@ router.post("/", async (req, res) => {
 
       await runSyncPipeline();
 
+      await autoFollow(
+        req.body.user_id || req.headers['user-id'],
+        'question',
+        query.id || query._id.toString()
+      );
+
+      const keywords = extractKeywords(`${question.trim()}`);
+      for (const tag of keywords) {
+        await dispatchNotification({
+          eventType: 'new_question',
+          triggeredByUserId: req.body.user_id || req.headers['user-id'] || 1,
+          followableType: 'tag',
+          followableId: tag,
+          message: `New question under #${tag}: ${question.substring(0, 50)}`
+        });
+      }
+
       return res.status(201).json({
         storage: "mongodb",
         data: query
@@ -87,6 +104,23 @@ router.post("/", async (req, res) => {
     });
 
     await runSyncPipeline();
+
+    await autoFollow(
+      req.body.user_id || req.headers['user-id'],
+      'question',
+      result.lastID
+    );
+
+    const keywords = extractKeywords(`${question.trim()}`);
+    for (const tag of keywords) {
+      await dispatchNotification({
+        eventType: 'new_question',
+        triggeredByUserId: req.body.user_id || req.headers['user-id'] || 1,
+        followableType: 'tag',
+        followableId: tag,
+        message: `New question under #${tag}: ${question.substring(0, 50)}`
+      });
+    }
 
     return res.status(201).json({
       storage: "sqlite",
@@ -173,6 +207,21 @@ router.patch("/:id/resolve", async (req, res) => {
 
       await runSyncPipeline();
 
+      await autoFollow(
+        req.body.user_id || req.headers['user-id'],
+        'question',
+        query.id || query._id.toString()
+      );
+
+      const username = req.headers['username'] || `User ${req.body.user_id || req.headers['user-id'] || 'Someone'}`;
+      await dispatchNotification({
+        eventType: 'question_answered',
+        triggeredByUserId: req.body.user_id || req.headers['user-id'] || 1,
+        followableType: 'question',
+        followableId: req.params.id,
+        message: `${username} answered / commented on: ${query.question.substring(0, 50)}`
+      });
+
       return res.json({
         storage: "mongodb",
         data: query
@@ -210,6 +259,21 @@ router.patch("/:id/resolve", async (req, res) => {
       `,
       req.params.id
     );
+
+    await autoFollow(
+      req.body.user_id || req.headers['user-id'],
+      'question',
+      req.params.id
+    );
+
+    const username = req.headers['username'] || `User ${req.body.user_id || req.headers['user-id'] || 'Someone'}`;
+    await dispatchNotification({
+      eventType: 'question_answered',
+      triggeredByUserId: req.body.user_id || req.headers['user-id'] || 1,
+      followableType: 'question',
+      followableId: req.params.id,
+      message: `${username} answered / commented on: ${updated.question.substring(0, 50)}`
+    });
 
     return res.json({
       storage: "sqlite",
