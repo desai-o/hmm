@@ -5,6 +5,7 @@ const { isMongoAvailable } = require("../db/mongo");
 const { getSQLiteDb } = require("../db/sqlite");
 const UserQuery = require("../models/UserQuery");
 const { runSyncPipeline } = require("../services/syncService");
+const { trackEvent } = require("../services/eventService");
 
 router.post("/", async (req, res) => {
   try {
@@ -36,6 +37,17 @@ router.post("/", async (req, res) => {
         source: "frontend"
       });
 
+      await trackEvent({
+        type: answer ? "faq_created" : "question_created",
+        userId: "anonymous",
+        targetType: "query",
+        targetId: String(query._id),
+        metadata: {
+          storage: "mongodb",
+          hasAnswer: Boolean(answer)
+        }
+      });
+
       await runSyncPipeline();
 
       return res.status(201).json({
@@ -62,6 +74,17 @@ router.post("/", async (req, res) => {
       answer ? "resolved" : "pending",
       "frontend"
     );
+
+    await trackEvent({
+      type: answer ? "faq_created" : "question_created",
+      userId: "anonymous",
+      targetType: "query",
+      targetId: String(result.lastID),
+      metadata: {
+        storage: "sqlite",
+        hasAnswer: Boolean(answer)
+      }
+    });
 
     await runSyncPipeline();
 
