@@ -12,6 +12,7 @@ const queryRoutes = require("./routes/queryRoutes");
 const searchRoutes = require("./routes/searchRoutes");
 const statsRoutes = require("./routes/statsRoutes");
 const aiRoutes = require("./routes/aiRoutes");
+const authRoutes = require("./routes/authRoutes");
 
 const app = express();
 
@@ -49,6 +50,7 @@ app.use("/api/faqs", faqRoutes);
 app.use("/api/queries", queryRoutes);
 app.use("/api/search", searchRoutes);
 app.use("/api/stats", statsRoutes);
+app.use("/api/auth", authRoutes);
 app.use("/api", aiRoutes);
 
 async function bootstrap() {

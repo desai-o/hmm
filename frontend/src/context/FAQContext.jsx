@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from "react";
+import { useAuth } from "./AuthContext";
 
 const FAQContext = createContext();
 
@@ -222,6 +223,7 @@ const initialContributors = [
 ];
 
 export function FAQProvider({ children }) {
+  const { user } = useAuth();
   const [questions, setQuestions] = useState(() => {
     const saved = localStorage.getItem("crowdfaq_questions");
     return saved ? JSON.parse(saved) : initialQuestions;
@@ -304,6 +306,8 @@ export function FAQProvider({ children }) {
       ? hashtagsString.split(",").map((t) => t.trim().replace(/^#/, "")).filter(Boolean)
       : [];
 
+    const authorName = user ? user.name : "Guest";
+
     const newQuestion = {
       id: Date.now(),
       title: title.trim(),
@@ -314,7 +318,7 @@ export function FAQProvider({ children }) {
       votes: 1,
       voted: false,
       bookmarked: false,
-      author: "Sarthak (You)",
+      author: authorName,
       time: "Just now",
       views: 1,
       answers: []
@@ -322,14 +326,19 @@ export function FAQProvider({ children }) {
 
     setQuestions((prev) => [newQuestion, ...prev]);
 
-    // Also update our own contributor profile questions count
-    setContributors((prev) =>
-      prev.map((c) =>
-        c.name === "Alex Chen" // representing current user / mock user avatar profile
-          ? { ...c, questions: c.questions + 1 }
-          : c
-      )
-    );
+    // Update contributor list with this user's question
+    setContributors((prev) => {
+      const exists = prev.some((c) => c.name === authorName);
+      if (exists) {
+        return prev.map((c) =>
+          c.name === authorName ? { ...c, questions: c.questions + 1 } : c
+        );
+      }
+      return [
+        ...prev,
+        { rank: 99, name: authorName, avatar: authorName.charAt(0).toUpperCase(), answers: 0, questions: 1, reputation: 5, tier: "bronze" }
+      ].sort((a, b) => b.reputation - a.reputation).map((c, i) => ({ ...c, rank: i + 1 }));
+    });
 
     // Save to backend
     try {
@@ -376,11 +385,12 @@ export function FAQProvider({ children }) {
     );
   };
 
-  const addAnswer = async (questionId, content, author = "Sarthak (You)") => {
+  const addAnswer = async (questionId, content) => {
+    const authorName = user ? user.name : "Guest";
     const newAnswer = {
       id: Date.now(),
-      author,
-      avatar: author.charAt(0).toUpperCase(),
+      author: authorName,
+      avatar: authorName.charAt(0).toUpperCase(),
       content: content.trim(),
       votes: 1,
       time: "Just now",
@@ -403,11 +413,11 @@ export function FAQProvider({ children }) {
 
     // Reward reputation and answers count
     setContributors((prev) => {
-      const exists = prev.some((c) => c.name === author);
+      const exists = prev.some((c) => c.name === authorName);
       if (exists) {
         return prev
           .map((c) =>
-            c.name === author
+            c.name === authorName
               ? { ...c, answers: c.answers + 1, reputation: c.reputation + 15 }
               : c
           )
@@ -416,7 +426,7 @@ export function FAQProvider({ children }) {
       } else {
         const list = [
           ...prev,
-          { rank: 99, name: author, avatar: author.charAt(0).toUpperCase(), answers: 1, questions: 0, reputation: 15, tier: "bronze" }
+          { rank: 99, name: authorName, avatar: authorName.charAt(0).toUpperCase(), answers: 1, questions: 0, reputation: 15, tier: "bronze" }
         ];
         return list
           .sort((a, b) => b.reputation - a.reputation)
